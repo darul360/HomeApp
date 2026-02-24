@@ -1,0 +1,83 @@
+﻿@inject IFirebaseService FirebaseService
+@inject NavigationManager NavigationManager
+
+<nav class="navbar navbar-expand-lg modern-header shadow-sm border-0 px-4">
+    <div class="container-fluid">
+        <a class="navbar-brand me-4" href="">🏠 Home Assistant</a>
+        
+        <button class="navbar-toggler border-0 shadow-none" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="@NavMenuCssClass navbar-collapse" @onclick="ToggleNavMenu">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <NavLink class="nav-link px-3" href="" Match="NavLinkMatch.All">
+                        Strona Główna
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link px-3" href="medical-docs">
+                        Badania Laboratoryjne
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link px-3" href="food-planner">
+                        Planer Jedzenia
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link px-3" href="documents">
+                        Repozytorium Dokumentów
+                    </NavLink>
+                </li>
+            </ul>
+
+            @if (currentUser != null)
+            {
+                <div class="d-flex align-items-center gap-3 ms-lg-auto py-2 py-lg-0">
+                    <div class="user-profile d-flex align-items-center gap-2 p-1 pe-3 rounded-pill bg-light border shadow-sm">
+                        @if (!string.IsNullOrEmpty(currentUser.PhotoUrl))
+                        {
+                            <img src="@currentUser.PhotoUrl" class="rounded-circle" style="width: 28px; height: 28px;" alt="Avatar" />
+                        }
+                        else
+                        {
+                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 28px; height: 28px; font-size: 0.7rem;">
+                                @currentUser.Email?[0].ToString().ToUpper()
+                            </div>
+                        }
+                        <span class="small fw-bold text-dark d-none d-xl-inline" style="font-size: 0.8rem;">@currentUser.Email</span>
+                    </div>
+                    
+                    <button class="btn btn-outline-danger btn-sm rounded-pill px-3 shadow-sm d-flex align-items-center gap-2 transition" @onclick="Logout">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span class="fw-bold">Wyloguj</span>
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+</nav>
+
+@code {
+    private bool collapseNavMenu = true;
+    private FirebaseUser? currentUser;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await FirebaseService.WaitForAuthAsync();
+    }
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    private async Task Logout()
+    {
+        await FirebaseService.LogoutAsync();
+    }
+}

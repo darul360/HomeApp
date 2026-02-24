@@ -1,0 +1,151 @@
+:root {
+    --primary: #1a73e8;
+    /* Google Blue */
+    --primary-light: #4285f4;
+    --secondary: #5f6368;
+    /* Google Gray */
+    --background: #f8f9fa;
+    --card-bg: #ffffff;
+    --header-bg: rgba(255, 255, 255, 0.95);
+    --text-main: #202124;
+    --text-muted: #5f6368;
+    --success: #1e8e3e;
+    /* Google Green */
+    --warning: #f9ab00;
+    /* Google Yellow */
+    --danger: #d93025;
+    /* Google Red */
+    --border-radius: 8px;
+    --pill-radius: 50px;
+    --border-color: #dadce0;
+    --shadow-sm: 0 1px 2px 0 rgba(60, 64, 67, .3), 0 1px 3px 1px rgba(60, 64, 67, .15);
+    --shadow-md: 0 1px 3px 0 rgba(60, 64, 67, .3), 0 4px 8px 3px rgba(60, 64, 67, .15);
+}
+
+body {
+    background-color: var(--background);
+    color: var(--text-main);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.modern-card {
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin-bottom: 1.5rem;
+}
+
+.modern-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.modern-header {
+    background: var(--card-bg);
+    border-bottom: 2px solid #f1f3f4;
+    padding: 0.75rem 0;
+    margin-bottom: 1.5rem;
+}
+
+/* Custom Multicolored Border Effect (Google Style) */
+.gradient-border {
+    position: relative;
+    padding: 1.5px;
+    border-radius: calc(var(--border-radius) + 1.5px);
+    background: linear-gradient(90deg, #4285F4, #EA4335, #FBBC05, #34A853);
+}
+
+.gradient-border-inner {
+    background: white;
+    border-radius: var(--border-radius);
+    height: 100%;
+    padding: 1rem;
+}
+
+/* Modern Input */
+.modern-input {
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+    background: #f8f9fa;
+    font-size: 0.95rem;
+}
+
+.modern-input:focus {
+    background: white;
+    border-color: var(--primary);
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .3), 0 1px 3px 1px rgba(60, 64, 67, .15);
+    outline: none;
+}
+
+/* Modern Button */
+.btn-modern {
+    background: var(--primary);
+    color: white;
+    border-radius: 8px;
+    padding: 0.5rem 1.5rem;
+    border: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3);
+}
+
+.btn-modern:hover {
+    background: #1967d2;
+    box-shadow: 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+/* Table styling (Modern Record Style) */
+.table-modern {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 12px;
+}
+
+.table-modern tr {
+    transition: transform 0.15s ease-out;
+}
+
+.table-modern tr:hover {
+    background-color: #fcfcfc;
+}
+
+.table-modern td {
+    background: white;
+    padding: 1.25rem 1rem;
+    border-top: 1px solid #f1f3f4;
+    border-bottom: 1px solid #f1f3f4;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.table-modern tr td:first-child {
+    border-left: 1px solid #f1f3f4;
+    border-radius: 12px 0 0 12px;
+}
+
+.table-modern tr td:last-child {
+    border-right: 1px solid #f1f3f4;
+    border-radius: 0 12px 12px 0;
+}
+
+.table-modern th {
+    padding: 0 1rem;
+    border: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+/* Remark rows should merge visually */
+.remark-row td {
+    padding-top: 0 !important;
+    border-top: none !important;
+    background: #f8f9fa !important;
+}

@@ -1,0 +1,608 @@
+﻿@page "/documents"
+@using HomeApp.Client.Models
+@using HomeApp.Client.Services
+@using System.Text.Json
+@inject IFirebaseService FirebaseService
+@inject IJSRuntime JSRuntime
+
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="m-0 fw-bold text-dark">Repozytorium Dokumentów</h2>
+        <div class="d-flex gap-2">
+            @if (isProcessing)
+            {
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                <span class="small text-muted">Przetwarzanie OCR...</span>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid px-4">
+    <div class="row g-4">
+        <!-- LEWO: Upload i Szukaj -->
+        <div class="col-lg-4">
+            <div class="modern-card mb-4" style="border-top: 4px solid #ea4335;">
+                <h5 class="fw-bold mb-3">Dodaj Skan</h5>
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Tytuł dokumentu (opcjonalnie)</label>
+                    <input type="text" class="form-control modern-input mb-3" @bind="uploadTitle" placeholder="Np. Morfologia Styczeń" />
+                    
+                    <label class="form-label text-muted small">Zdjęcie lub PDF (max 10MB)</label>
+                    <InputFile @key="inputFileKey" OnChange="@UploadDocument" class="form-control modern-input" />
+                </div>
+            </div>
+
+            <div class="modern-card">
+                <h5 class="fw-bold mb-3">Szukaj w treści</h5>
+                <div class="mb-2">
+                    <input type="text" class="form-control modern-input shadow-sm" placeholder="Wpisz frazę z dokumentu..." 
+                           @bind="searchTerm" @bind:event="oninput" />
+                </div>
+                <small class="text-muted">Znaleziono: @FilteredDocuments.Count() dokumentów</small>
+            </div>
+        </div>
+
+        <!-- PRAWO: Wyniki -->
+        <div class="col-lg-8">
+            <div class="modern-card">
+                <h5 class="fw-bold mb-3">Twoje Dokumenty</h5>
+                
+                @if (userTags.Any())
+                {
+                    <div class="d-flex flex-wrap gap-2 mb-4 p-3 bg-light rounded shadow-sm">
+                        <span class="text-muted small fw-bold me-2 align-self-center">Filtruj po tagach:</span>
+                        @foreach (var tag in userTags)
+                        {
+                            <button class="btn btn-sm rounded-pill px-3 @(filterTagIds.Contains(tag.Id) ? "" : "btn-outline-secondary opacity-75")"
+                                    style="background-color: @(filterTagIds.Contains(tag.Id) ? tag.Color : "transparent"); color: @(filterTagIds.Contains(tag.Id) ? "white" : "inherit"); border-color: @tag.Color; transition: all 0.2s;"
+                                    @onclick="() => ToggleFilterTag(tag.Id)">
+                                @tag.Name
+                                @if (filterTagIds.Contains(tag.Id))
+                                {
+                                    <i class="bi bi-check-lg ms-1"></i>
+                                }
+                            </button>
+                        }
+                        @if (filterTagIds.Any())
+                        {
+                            <button class="btn btn-sm btn-link text-danger text-decoration-none fw-bold small" @onclick="ClearFilters">
+                                <i class="bi bi-x-circle me-1"></i> Wyczyść
+                            </button>
+                        }
+                    </div>
+                }
+
+                <div class="list-group list-group-flush">
+                    @foreach (var doc in FilteredDocuments)
+                    {
+                        <div class="list-group-item border-0 px-0 mb-3 bg-transparent">
+                            <div class="modern-card m-0 p-4 shadow-sm border border-light" style="background: rgba(255,255,255,0.7); backdrop-filter: blur(5px);">
+                                <div class="d-flex w-100 justify-content-between align-items-center mb-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div>
+                                            <h6 class="mb-0 fw-bold text-dark fs-5">@doc.Title</h6>
+                                            @if (!string.IsNullOrEmpty(doc.FileName))
+                                            {
+                                                <div class="small text-muted" style="font-size: 0.75rem;">@doc.FileName</div>
+                                            }
+                                        </div>
+                                        <div class="d-flex gap-1">
+                                            @if (doc.TagIds != null)
+                                            {
+                                                @foreach (var tagId in doc.TagIds)
+                                                {
+                                                    var tag = userTags.FirstOrDefault(t => t.Id == tagId);
+                                                    if (tag != null)
+                                                    {
+                                                        <span class="badge rounded-pill shadow-sm" style="background-color: @tag.Color; font-size: 0.75rem;">@tag.Name</span>
+                                                    }
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                    <span class="badge rounded-pill bg-light text-muted">@doc.UploadedDate.ToShortDateString()</span>
+                                </div>
+                                
+                                @if (expandedOcrIds.Contains(doc.Id))
+                                {
+                                    <div class="bg-white p-3 rounded mb-3 border animate__animated animate__fadeIn" style="max-height: 250px; overflow-y: auto; font-size: 0.9rem; color: #3c4043; line-height: 1.6; border-left: 4px solid var(--primary) !important;">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <span class="text-muted small fw-bold uppercase"><i class="bi bi-text-left me-1"></i> Treść OCR:</span>
+                                            <button class="btn btn-sm py-0 text-primary fw-bold" @onclick="() => ToggleOcr(doc.Id)">Ukryj</button>
+                                        </div>
+                                        <div id="ocr-@doc.Id">@(ocrTexts.TryGetValue(doc.Id, out var txt) ? txt : "Ładowanie...")</div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="mb-3">
+                                        <button class="btn btn-sm btn-link p-0 text-decoration-none text-muted fw-bold" @onclick="() => ToggleOcr(doc.Id)">
+                                            <i class="bi bi-text-paragraph me-1"></i> Pokaż tekst OCR
+                                        </button>
+                                    </div>
+                                }
+
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button @onclick="() => DeleteDocument(doc)" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-bold">
+                                        <i class="bi bi-trash"></i> Usuń
+                                    </button>
+                                    <button @onclick="() => ViewOriginal(doc)" class="btn btn-sm btn-outline-primary rounded-pill px-4 fw-bold">
+                                        <i class="bi bi-eye"></i> Pokaż Podgląd
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (showPreviewModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0" style="border-radius: 15px;">
+                <div class="modal-header bg-primary text-white border-0 py-3 px-4" style="border-radius: 15px 15px 0 0;">
+                    <h5 class="modal-title fw-bold m-0"><i class="bi bi-file-earmark-text me-2"></i> Podgląd OCR</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelUpload"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted small">Tagi</label>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            @foreach (var tag in userTags)
+                            {
+                                <button type="button" class="btn btn-sm rounded-pill px-3 @(selectedTagIds.Contains(tag.Id) ? "" : "btn-outline-secondary opacity-75")" 
+                                        style="background-color: @(selectedTagIds.Contains(tag.Id) ? tag.Color : "transparent"); color: @(selectedTagIds.Contains(tag.Id) ? "white" : "inherit"); border-color: @tag.Color"
+                                        @onclick="() => ToggleTagSelection(tag.Id)">
+                                    @tag.Name
+                                </button>
+                            }
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" @onclick="() => showAddTagUI = !showAddTagUI">
+                                <i class="bi bi-plus-lg"></i> Nowy Tag
+                            </button>
+                        </div>
+                        
+                        @if (showAddTagUI)
+                        {
+                            <div class="p-3 border rounded bg-light mb-3 animate__animated animate__fadeIn">
+                                <h6 class="small fw-bold mb-2">Stwórz nowy tag</h6>
+                                <div class="row g-2">
+                                    <div class="col">
+                                        <input type="text" class="form-control form-control-sm modern-input" @bind="newTagName" placeholder="Nazwa tagu (np. Dom)" />
+                                    </div>
+                                    <div class="col-auto">
+                                        <input type="color" class="form-control form-control-sm form-control-color" @bind="newTagColor" style="width: 40px; height: 31px; padding: 2px;" />
+                                    </div>
+                                    <div class="col-auto">
+                                        <button class="btn btn-sm btn-primary px-3" @onclick="CreateNewTag">Dodaj</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted small">Odczytany tekst (OCR)</label>
+                        <textarea class="form-control modern-input" style="height: 200px; font-size: 0.9rem;" @bind="previewOcrText"></textarea>
+                    </div>
+                    <div class="alert alert-info py-2 px-3 small d-flex align-items-center mb-0">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        Sprawdź i ewentualnie popraw treść oraz wybierz tagi przed zapisem.
+                    </div>
+                </div>
+                <div class="modal-footer border-0 py-3 px-4">
+                    <button class="btn btn-secondary rounded-pill px-4" @onclick="CancelUpload">Anuluj</button>
+                    <button class="btn btn-primary rounded-pill px-4 shadow-sm" @onclick="SaveDocument" disabled="@isUploading">
+                        @if (isUploading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Zapisywanie...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cloud-arrow-up me-2"></i>
+                            <span>Zapisz do Repozytorium</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showPdfPreviewModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5); z-index: 1060;">
+        <div class="modal-dialog modal-xl modal-dialog-centered" style="max-height: 95vh;">
+            <div class="modal-content shadow-lg border-0" style="border-radius: 15px; height: 90vh;">
+                <div class="modal-header bg-dark text-white border-0 py-3 px-4" style="border-radius: 15px 15px 0 0;">
+                    <h5 class="modal-title fw-bold m-0 text-truncate" style="max-width: 80%;"><i class="bi bi-eye me-2"></i> Podgląd Dokumentu</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ClosePdfPreview"></button>
+                </div>
+                <div class="modal-body p-0 bg-dark d-flex align-items-center justify-content-center overflow-auto" style="min-height: 200px;">
+                    @if (!string.IsNullOrEmpty(previewBlobUrl))
+                    {
+                        if (viewingDocContentType?.StartsWith("image/") == true)
+                        {
+                            <img src="@previewBlobUrl" class="img-fluid rounded shadow-lg animate__animated animate__zoomIn" style="max-height: 80vh; object-fit: contain;" alt="Podgląd dokumentu" />
+                        }
+                        else
+                        {
+                            <iframe src="@previewBlobUrl" class="w-100 h-100 border-0"></iframe>
+                        }
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 text-white p-5">
+                            <div class="spinner-border mb-3"></div>
+                            <span>Przygotowywanie dokumentu...</span>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer border-0 py-2 px-4 shadow-sm">
+                    <button class="btn btn-secondary rounded-pill px-4" @onclick="ClosePdfPreview">Zamknij</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ScannedDocument> documents = new();
+    private string searchTerm = "";
+    private bool isUploading = false;
+    private bool isProcessing = false;
+    private Dictionary<string, string> ocrTexts = new();
+    private List<DocumentTag> userTags = new();
+    private List<string> selectedTagIds = new();
+    private List<string> filterTagIds = new();
+    private HashSet<string> expandedOcrIds = new();
+    private FirebaseUser? currentUser;
+
+    private bool showPreviewModal = false;
+    private string previewTitle = "";
+    private string previewOcrText = "";
+    private string previewBase64 = "";
+    private string previewContentType = "";
+    private string previewOriginalFileName = "";
+
+    // Upload state
+    private string uploadTitle = "";
+    private Guid inputFileKey = Guid.NewGuid();
+
+    // Add Tag UI
+    private bool showAddTagUI = false;
+    private string newTagName = "";
+    private string newTagColor = "#1a73e8";
+
+    // PDF Preview Modal
+    private bool showPdfPreviewModal = false;
+    private string viewingDocTitle = "";
+    private string viewingDocContentType = "";
+    private string previewBlobUrl = "";
+
+    private IEnumerable<ScannedDocument> FilteredDocuments
+    {
+        get
+        {
+            var result = documents.AsEnumerable();
+
+            // Search filter
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                result = result.Where(d => d.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                                          (ocrTexts.TryGetValue(d.Id, out var text) && text.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            // Tag filter
+            if (filterTagIds.Any())
+            {
+                result = result.Where(d => d.TagIds != null && filterTagIds.Any(fid => d.TagIds.Contains(fid)));
+            }
+
+            return result;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await FirebaseService.GetCurrentUserAsync();
+        if (currentUser != null)
+        {
+            await LoadTags();
+            await LoadDocuments();
+        }
+    }
+
+    private async Task LoadTags()
+    {
+        if (currentUser == null) return;
+        userTags = await FirebaseService.GetDocumentsAsync<DocumentTag>("document_tags", 100, "userId", currentUser.Id);
+        
+        // Add default tags if none exist
+        if (!userTags.Any())
+        {
+            var defaultTags = new[] { 
+                new { n = "Praca", c = "#ea4335" }, 
+                new { n = "Dom", c = "#34a853" }, 
+                new { n = "Rachunki", c = "#fbbc05" } 
+            };
+            foreach (var dt in defaultTags)
+            {
+                var tag = new DocumentTag { Name = dt.n, Color = dt.c, UserId = currentUser.Id };
+                await FirebaseService.AddDocumentWithIdAsync("document_tags", tag.Id, tag);
+                userTags.Add(tag);
+            }
+        }
+    }
+
+    private async Task LoadDocuments()
+    {
+        if (currentUser == null) return;
+        documents = await FirebaseService.GetDocumentsAsync<ScannedDocument>("scanned_documents", 50, "userId", currentUser.Id);
+        documents = documents.OrderByDescending(d => d.UploadedDate).ToList();
+    }
+
+    private async Task LoadOcrText(string docId)
+    {
+        if (ocrTexts.ContainsKey(docId)) return;
+
+        var results = await FirebaseService.GetDocumentsAsync<DocumentOcr>("ocr_results", 1, "id", docId);
+        if (results.Any())
+        {
+            var text = results.First().FullText;
+            ocrTexts[docId] = text;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleOcr(string docId)
+    {
+        if (expandedOcrIds.Contains(docId))
+        {
+            expandedOcrIds.Remove(docId);
+        }
+        else
+        {
+            expandedOcrIds.Add(docId);
+            _ = LoadOcrText(docId);
+        }
+    }
+
+    private void ToggleFilterTag(string tagId)
+    {
+        if (filterTagIds.Contains(tagId)) filterTagIds.Remove(tagId);
+        else filterTagIds.Add(tagId);
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        filterTagIds.Clear();
+        StateHasChanged();
+    }
+
+
+    private async Task DeleteDocument(ScannedDocument doc)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Czy na pewno chcesz trwale usunąć dokument '{doc.Title}'?");
+        if (!confirmed) return;
+
+        try
+        {
+            isProcessing = true;
+            StateHasChanged();
+
+            // 1. Delete chunks
+            await FirebaseService.DeleteChunksAsync("document_chunks", doc.Id, doc.ChunkCount);
+
+            // 2. Delete OCR result
+            await FirebaseService.DeleteDocumentAsync("ocr_results", doc.Id);
+
+            // 3. Delete metadata
+            await FirebaseService.DeleteDocumentAsync("scanned_documents", doc.Id);
+
+            await LoadDocuments();
+            ocrTexts.Remove(doc.Id);
+            expandedOcrIds.Remove(doc.Id);
+            
+            await JSRuntime.InvokeVoidAsync("alert", "Dokument został usunięty.");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Błąd podczas usuwania: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ViewOriginal(ScannedDocument doc)
+    {
+        try 
+        {
+            showPdfPreviewModal = true;
+            viewingDocTitle = doc.Title;
+            viewingDocContentType = string.IsNullOrEmpty(doc.ContentType) ? "application/pdf" : doc.ContentType;
+            previewBlobUrl = ""; // Reset while loading
+            StateHasChanged();
+
+            var base64 = await FirebaseService.GetCombinedChunksAsync("document_chunks", doc.Id, doc.ChunkCount);
+            previewBlobUrl = await JSRuntime.InvokeAsync<string>("firebaseService.getBlobUrl", base64, doc.ContentType);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            showPdfPreviewModal = false;
+            await JSRuntime.InvokeVoidAsync("alert", $"Błąd podczas otwierania: {ex.Message}");
+        }
+    }
+
+    private async Task ClosePdfPreview()
+    {
+        if (!string.IsNullOrEmpty(previewBlobUrl))
+        {
+            await JSRuntime.InvokeVoidAsync("firebaseService.revokeUrl", previewBlobUrl);
+        }
+        previewBlobUrl = "";
+        showPdfPreviewModal = false;
+    }
+
+    private void ToggleTagSelection(string tagId)
+    {
+        if (selectedTagIds.Contains(tagId)) selectedTagIds.Remove(tagId);
+        else selectedTagIds.Add(tagId);
+    }
+
+    private async Task CreateNewTag()
+    {
+        if (string.IsNullOrWhiteSpace(newTagName) || currentUser == null) return;
+        
+        var tag = new DocumentTag { 
+            Name = newTagName.Trim(), 
+            Color = newTagColor, 
+            UserId = currentUser.Id 
+        };
+
+        if (await FirebaseService.AddDocumentWithIdAsync("document_tags", tag.Id, tag))
+        {
+            userTags.Add(tag);
+            selectedTagIds.Add(tag.Id);
+            newTagName = "";
+            showAddTagUI = false;
+        }
+    }
+
+    private async Task UploadDocument(InputFileChangeEventArgs e)
+    {
+        isProcessing = true;
+        try
+        {
+            var file = e.File;
+            var buffer = new byte[file.Size];
+            await file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).ReadAsync(buffer);
+            previewBase64 = Convert.ToBase64String(buffer);
+            previewContentType = file.ContentType;
+            previewOriginalFileName = file.Name;
+
+            if (string.IsNullOrWhiteSpace(uploadTitle))
+            {
+                previewTitle = file.Name;
+            }
+            else
+            {
+                previewTitle = uploadTitle;
+            }
+
+            // Run OCR (Client-side)
+            if (file.ContentType == "application/pdf")
+            {
+                previewOcrText = await FirebaseService.RecognizePdfAsync(previewBase64);
+            }
+            else
+            {
+                // For images, we need a URL or Blob. Let's use a temporary data URL.
+                var dataUrl = $"data:{file.ContentType};base64,{previewBase64}";
+                previewOcrText = await FirebaseService.RecognizeTextAsync(dataUrl);
+            }
+
+            previewOcrText = previewOcrText?.Trim() ?? "";
+            selectedTagIds.Clear();
+            showAddTagUI = false;
+            showPreviewModal = true;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Błąd podczas OCR: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void CancelUpload()
+    {
+        showPreviewModal = false;
+        uploadTitle = "";
+        inputFileKey = Guid.NewGuid();
+    }
+
+    private async Task SaveDocument()
+    {
+        if (isUploading || currentUser == null) return;
+        isUploading = true;
+
+        try
+        {
+            // 1. Process PDF (Compression & Chunking)
+            string processedBase64 = previewBase64;
+            if (previewContentType == "application/pdf")
+            {
+                processedBase64 = await FirebaseService.CompressPdfAsync(previewBase64);
+            }
+
+            var chunks = await FirebaseService.ChunkStringAsync(processedBase64, 800000); // 800KB chunks to stay safe within 1MB
+
+            // 2. Create IDs
+            var docId = Guid.NewGuid().ToString();
+
+            // 3. Save Chunks to "document_chunks"
+            for (int i = 0; i < chunks.Length; i++)
+            {
+                var chunk = new DocumentChunk
+                {
+                    Id = $"{docId}_{i}",
+                    DocumentId = docId,
+                    Index = i,
+                    Data = chunks[i],
+                    UserId = currentUser.Id
+                };
+                await FirebaseService.AddDocumentWithIdAsync("document_chunks", chunk.Id, chunk);
+            }
+
+            // 4. Save OCR to "ocr_results"
+            var ocrResult = new DocumentOcr
+            {
+                Id = docId,
+                FullText = previewOcrText,
+                UserId = currentUser.Id
+            };
+            await FirebaseService.AddDocumentWithIdAsync("ocr_results", docId, ocrResult);
+
+            // 5. Save Metadata to "scanned_documents"
+            var docMetadata = new ScannedDocument
+            {
+                Id = docId,
+                Title = previewTitle,
+                FileName = previewOriginalFileName,
+                ContentType = previewContentType,
+                ChunkCount = chunks.Length,
+                UploadedDate = DateTime.Now,
+                UserId = currentUser.Id,
+                TagIds = new List<string>(selectedTagIds)
+            };
+
+            await FirebaseService.AddDocumentWithIdAsync("scanned_documents", docId, docMetadata);
+            
+            showPreviewModal = false;
+            uploadTitle = "";
+            inputFileKey = Guid.NewGuid();
+            await LoadDocuments();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Błąd podczas zapisu: {ex.Message}");
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+}

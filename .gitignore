@@ -1,0 +1,8 @@
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.sln.docstates
+.firebase/
+firebase_config.json
