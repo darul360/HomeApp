@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="HomeApp.Client/HomeApp.Client.csproj" />
+  <Project Path="HomeApp.Shared/HomeApp.Shared.csproj" />
+</Solution>
